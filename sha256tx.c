@@ -5,24 +5,29 @@
 * Disclaimer: This code is presented "as is" without any guarantees.
 * Details:    Defines the API for the corresponding SHA1 implementation.
 *********************************************************************/
-//@wynn debug option
 //#define DDDDD
 
 /*************************** HEADER FILES ***************************/
 #include <stddef.h>
+#ifdef WIN32
+#include <winsock2.h>
+#include <windows.h>
+#endif
 
 /****************************** MACROS ******************************/
 #define SHA256_BLOCK_SIZE 32            // SHA256 outputs a 32 byte digest
 
 /**************************** DATA TYPES ****************************/
 typedef unsigned char BYTE;             // 8-bit byte
-typedef unsigned int  WORD;             // 32-bit word, change to "long" for 16-bit machines
+#ifndef WIN32
+typedef unsigned int  DWORD;             // 32-bit word, change to "long" for 16-bit machines
+#endif
 
 typedef struct {
 	BYTE data[64];
-	WORD datalen;
+	DWORD datalen;
 	unsigned long long bitlen;
-	WORD state[8];
+	DWORD state[8];
 } SHA256_CTX;
 
 /*********************** FUNCTION DECLARATIONS **********************/
@@ -50,7 +55,7 @@ void sha256_final(SHA256_CTX *ctx, BYTE hash[]);
 #define SIG1(x) (ROTRIGHT(x,17) ^ ROTRIGHT(x,19) ^ ((x) >> 10))
 
 /**************************** VARIABLES *****************************/
-static const WORD k[64] = {
+static const DWORD k[64] = {
 	0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
 	0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
 	0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
@@ -64,7 +69,7 @@ static const WORD k[64] = {
 /*********************** FUNCTION DEFINITIONS ***********************/
 void sha256_transform(SHA256_CTX *ctx, const BYTE data[])
 {
-	WORD a, b, c, d, e, f, g, h, i, j, t1, t2, m[64];
+	DWORD a, b, c, d, e, f, g, h, i, j, t1, t2, m[64];
 
 	for (i = 0, j = 0; i < 16; ++i, j += 4)
 		m[i] = (data[j] << 24) | (data[j + 1] << 16) | (data[j + 2] << 8) | (data[j + 3]);
@@ -119,7 +124,7 @@ void sha256_init(SHA256_CTX *ctx)
 
 void sha256_update(SHA256_CTX *ctx, const BYTE data[], size_t len)
 {
-	WORD i;
+	DWORD i;
 
 	for (i = 0; i < len; ++i) {
 		ctx->data[ctx->datalen] = data[i];
@@ -134,7 +139,7 @@ void sha256_update(SHA256_CTX *ctx, const BYTE data[], size_t len)
 
 void sha256_final(SHA256_CTX *ctx, BYTE hash[])
 {
-	WORD i;
+	DWORD i;
 
 	i = ctx->datalen;
 
@@ -178,6 +183,17 @@ void sha256_final(SHA256_CTX *ctx, BYTE hash[])
 	}
 }
 
+/*
+        READWRITE(this->nVersion);      4      0
+        READWRITE(hashPrevBlock);       32     1 
+        READWRITE(hashMerkleRoot);      32     9
+        READWRITE(nTime);               4      17
+        READWRITE(nBits);               4      18
+        READWRITE(nNonce);              4      19   ->80
+        READWRITE(hashStateRoot);       32      
+        READWRITE(hashUTXORoot);        32          ->80+64
+        READWRITE(prevoutStake);        36          ->80+100
+ */
 
 void  sha256( unsigned char * hash , unsigned char * data , int len ){
     SHA256_CTX  ctx;
@@ -224,14 +240,17 @@ void dump_header( unsigned char * p){
 	printf("nonce: %08x \n" , *(unsigned int*)p);p+=4;
 	printf("state: "); print_hash(p); printf("\n");p+=32;
 	printf("utxo : "); print_hash(p); printf("\n");p+=32;
-	printf("prevStake: "); print_hash(p); p+=32 ; printf("-%08x\n",*(unsigned int*)p);
+	printf("prevStake: "); print_hash(p); p+=32 ; printf("-%08x\n",*(unsigned int*)p); p+=4;
+	printf("StakeSignLength: %d\n",*p); ;
+	
 }
 #endif
 
 
+#ifndef TEST
 int scanhash_sha256tx(int thr_id, uint32_t *pdata, const uint32_t *ptarget,uint32_t max_nonce, uint64_t *hashes_done){
 
-	uint32_t data[45] __attribute__((aligned(32)));
+	uint32_t data[46] __attribute__((aligned(32)));
 	uint32_t hash[8] __attribute__((aligned(32)));
 
 
@@ -273,4 +292,4 @@ int scanhash_sha256tx(int thr_id, uint32_t *pdata, const uint32_t *ptarget,uint3
 	return 0;
 }
 
-
+#endif
